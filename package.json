@@ -10,7 +10,6 @@
     "dotenv": "^16.0.3",
     "imap-simple": "^5.0.0",
     "mailparser": "^3.6.4",
-    "puppeteer": "^21.3.8"
+    "puppeteer": "^24.10.2"
   }
-
 }
