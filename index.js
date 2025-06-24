@@ -7,14 +7,13 @@ dotenv.config();
 
 const email = process.env.EMAIL_USER;
 const password = process.env.EMAIL_PASS;
-
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 const getVerificationCode = async () => {
   const config = {
     imap: {
       user: email,
-      password,
+      password: password,
       host: 'imap.gmail.com',
       port: 993,
       tls: true,
@@ -38,38 +37,31 @@ const getVerificationCode = async () => {
     const messages = await connection.search(searchCriteria, fetchOptions);
     console.log(`📦 Found ${messages.length} message(s)`);
 
-    const recent = messages.slice(-1); // Only check the newest one
-
+    const recent = messages.slice(-1);
     for (const item of recent) {
-      let parsed;
       try {
         const raw = item.parts?.[0]?.body || '';
-        parsed = await simpleParser(raw);
-      } catch (err) {
-        console.log('⚠️ Error parsing email body:', err.message);
-        continue;
-      }
+        const parsed = await simpleParser(raw);
+        const from = parsed.from?.text || 'undefined';
+        const subject = parsed.subject || 'undefined';
+        const bodyText = parsed.text || '';
 
-      const from = parsed.from?.text || 'undefined';
-      const subject = parsed.subject || 'undefined';
-      const bodyText = parsed.text || '';
+        console.log(`📧 From: ${from}`);
+        console.log(`📌 Subject: ${subject}`);
+        console.log(`✉️ Body Preview:\n${bodyText.slice(0, 300)}...`);
 
-      console.log(`📧 From: ${from}`);
-      console.log(`📌 Subject: ${subject}`);
-      console.log(`✉️ Body Preview:\n${bodyText.slice(0, 300)}...`);
-
-      if (from.includes('no-reply@tnsi.com')) {
-        let match = subject.match(/\b\d{5}\b/) || bodyText.match(/\b\d{5}\b/);
-
-        if (match) {
-          console.log('✅ Code found:', match[0]);
-          await connection.end();
-          return match[0];
+        if (from.includes('no-reply@tnsi.com')) {
+          const match = subject.match(/\b\d{5}\b/) || bodyText.match(/\b\d{5}\b/);
+          if (match) {
+            console.log('✅ Code found:', match[0]);
+            await connection.end();
+            return match[0];
+          }
         } else {
-          console.log('⚠️ No code found in message from tnsi.com.');
+          console.log('❌ Sender does not match no-reply@tnsi.com');
         }
-      } else {
-        console.log('❌ Sender does not match no-reply@tnsi.com');
+      } catch (err) {
+        console.log('⚠️ Error parsing email:', err.message);
       }
     }
 
@@ -78,7 +70,7 @@ const getVerificationCode = async () => {
   }
 
   await connection.end();
-  console.log('❌ No verification code found after all attempts.');
+  console.log('❌ No verification code found.');
   return null;
 };
 
@@ -97,12 +89,10 @@ const startAutomation = async (attempt = 1) => {
         '--disable-extensions',
         '--start-maximized',
       ],
-
       defaultViewport: null,
     });
 
     const page = await browser.newPage();
-
     await page.goto('https://www.freecallerregistry.com/fcr/#', {
       waitUntil: 'networkidle2',
       timeout: 60000,
@@ -110,14 +100,11 @@ const startAutomation = async (attempt = 1) => {
 
     await page.waitForSelector('#nextButton', { visible: true });
     await page.click('#nextButton');
-
     await page.waitForSelector('#enterprise_phone_0');
 
-    // Fill Phone 1
     await page.type('#enterprise_phone_0', '4697540527');
     await page.type('#enterprise_displayName_0', 'GLOBAL MEDICAL');
 
-    // Add and fill Phone 2
     await page.click('#add-number-command');
     await page.waitForSelector('#enterprise_phone_1');
     await page.type('#enterprise_phone_1', '5617701747');
@@ -138,26 +125,23 @@ const startAutomation = async (attempt = 1) => {
     await page.type('#call_count', '10000');
     await page.type('#additional_feedback', '');
 
-    // Request verification code
     const button = await page.$('#send-verification-code');
     await button.evaluate(b => b.scrollIntoView());
     await button.click();
 
-    console.log('Waiting for verification code...');
+    console.log('📨 Waiting for verification code...');
     const code = await getVerificationCode();
 
     if (code) {
       await page.waitForSelector('#captcha', { visible: true });
       await page.type('#captcha', code);
       console.log('✅ Verification code entered!');
-
       await page.waitForSelector('#submitButton', { visible: true });
       await page.click('#submitButton');
       console.log('🚀 Form submitted!');
     } else {
       console.log('❌ Verification code not found.');
     }
-
 
   } catch (err) {
     console.log(`⚠️ Error occurred: ${err.message}`);
@@ -170,12 +154,10 @@ const startAutomation = async (attempt = 1) => {
     }
   } finally {
     if (browser) {
-      await delay(2000); // wait 2 seconds
+      await delay(2000);
       await browser.close();
-    } else {
-      console.log('🧼 No browser instance to close.');
     }
-}
+  }
 };
 
 startAutomation();
